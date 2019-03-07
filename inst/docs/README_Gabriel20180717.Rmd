@@ -1,0 +1,118 @@
+---
+output:
+  md_document:
+    variant: markdown_github
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+```
+
+# DMRcompare File Map
+
+The goal of `DMRcompare` is to facilitate the comparison of three methods for detecting differentially methylated regions (DMRs) of a genome. The scripts and files are organized as follows:
+
+1. GSE41169 Data Import and Subsetting: script in `1_downloader2.5.R`
+2. A-clustering and initial data file creation: script in `1_Aclust_data_import.R`
+3. Data Simulation: function `SimulateData()` in script `2_simulatedata.R`
+4. Method execution: functions `RunBumphunter()`, `RunDMRcate()`, and `RunProbeLasso()` in script files `RunBumphunter.R`, `RunDMRcate.R`, and `RunProbeLasso.R`, respectively. These functions call the internal utility function `StandardizeOutput()` in the file `3_standard_method_output.R`
+5. Design-point Iteration: the functions `WriteBumphunterResults()`, `WriteDMRcateResults()`, and `WriteProbeLassoResults()` iterate over the design points for each entry in the grid of parameters and call the respective `Run***()` function. At each simulation point, the raw results files are saved to a specified directory. The `Write***Results()` functions are stored in the scripts `4_simulate_and_save_Bumphunter_results.R`, `4_simulate_and_save_DMRcate_results.R`, and `4_simulate_and_save_ProbeLasso_results.R`, respectively.
+6. Summarize Results: given a directory of results files as mentioned in the previous step, the `ProcessBumphunterResults()`, `ProcessDMRcateResults()`, and `ProcessProbeLassoResults()` functions import and summarize the results files. The scripts for these functions are in the files `5_read_and_summarize_Bumphunter_results.R`, `5_read_and_summarize_DMRcate_results.R`, and `5_read_and_summarize_ProbeLasso_results.R`, respectively. Moreover, each function calls two internal utility functions: `CleanResults()` (in script `5_clean_DMR_results.R`) and `SummarizeResults()` (in script `5_summarize_DMR_results.R`)
+7. Summarize Comb-p Results: because this method is not coded in the `R` programming language, we do not store the scripts necessary to render these results in this package. However, the function `ProcessCombpResults()` imports, standardizes, and summarizes the output of this method. The script containing this function is `5_standardize_and_summarize_Comb-p_results.R`.
+8. Build Summary Tables: the code to build the tables in the paper is stored in the script report `inst/docs/Method_compare_report_20180705.Rmd`.
+9. Build Graphics:
+    - Venn Diagrams: the function `PlotOverlaps()` in script file `6_Plot_DMR-Overlaps_Venn.R` will build the Venn Diagram figures.
+    - Precision-Recall Curves: the functions `BuildPRcurve()` and `PlotPRCurve()` in scripts `6_Build_Precision-Recall_Curve_List.R` and `6_Plot_Precision-Recall_Curves.R`, respectively, build precision-recall curve plots.
+    - Miscelleneous Figures: the other figures in the paper were built using the code in the script report `inst/docs/Method_compare_graphs_20180709.Rmd`.
+
+
+
+</br>
+</br>
+</br>
+
+# Data Setup
+These are the files that we used to import the raw data we used to simulate our data.
+
+- `inst/old_scripts/1_downloader2.5.R`: download the raw `GSE41169` data set; save the phenotype data for 14 subjects and the matching gene expression data.
+- `inst/old_scripts/1_Aclust_data_import.R`: clean the `'4 Annotation file'` file found at <https://rforge.net/IMA/>; clean the matrix of beta values. Section 1 of this script generates the data set `cpgLocation_df`, Section 2 generates the data set `betaVals_mat`, and Section 4 generates the data set `startEndCPG_df`. You should generate these data sets in order to execute the code in the remainder of this overview.
+
+
+
+# Run a Simulation and Save its Results
+Once the preliminary data has been set up, you can choose a method, its parameter points, and data design points.
+
+## Design
+Because we are conducting a variation of a power analysis, the main design feature is the $\delta$ parameter: the size of the treatment effect that will be added to synthetically create a DMR. For example, here is a brief example of one of our designs:
+
+- Method: DMRcate. This method requires two parameters: $(\lambda, C)$.
+- Discrete Parameter Space: $\lambda = (200, 250, 500, 750, 1000)$; $C = (1, 2, 3, 4, 5)$.
+- Design Points: $\delta = (0, 0.025, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40)$ for each replicate. We control reproducibility by setting the random seed of each replicate as well: we have seed values equal to $(100, 210, 330, 450, 680)$.
+
+## Implementation
+To execute and save the results of the simulation design above, we will execute the following code. The first three arguments correspond to the data files that you created in the "Data Setup" section above. The next two arguments, `parallel` and `numCores` address completing the simulation via distributed computing. We have designed our `Write***Results()` functions to support parallel computing in Windows and UNIX-based system environments. The `delta_num` and `seeds_int` arguments are where we specify our simulation design points, while the `lambdas_int` and `Cs_int` arguments define the DMRcate-method parameter space. Finally, because this function will perform $8 \times 5 \times 5 \times 5$ simulations---and save a corresponding raw data file for each---we specify a results directory to hold these files. We recommend that you use the same directory for each method, so that the DMRcate, ProbeLasso, Bumphunter, and even Comb-p raw results files are all in the same place.
+```{r WriteDMRcate, eval = FALSE}
+# Load the data you created in the "Data Setup" step
+data("betaVals_mat")
+data("cpgLocation_df")
+data("startEndCPG_df")
+
+# Simulate the power of the DMRcate method at various design points
+WriteDMRcateResults(
+  beta_mat = betaVals_mat,
+  CPGs_df = cpgLocation_df,
+  Aclusters_df = startEndCPG_df,
+  parallel = TRUE,
+  numCores = detectCores() - 2,
+  deltas_num = c(0, 0.025, 0.05, 0.10, 0.15, 0.20, 0.30, 0.40),
+  seeds_int = c(100, 210, 330, 450, 680),
+  lambdas_num = c(200, 250, 500, 750, 1000),
+  Cs_int = 1:5,
+  resultsDir = "DMRcate_compare/"
+)
+```
+
+This will take a few hours, depending on the speed of the machine and the number of available processors. This function will name these files `DMRcateResults_delta<DELTA>_seed<SEED>_lambda<LAMBDA>_C<C>.RDS`. *It is **imperative** that you do not change the names of these files, as the functions in the next step parse the file names for meta-data about the simulation which generated them.*
+
+The necessary `.R` files to execute the code above (and similar code for the ProbeLasso or Bumphunter methods) are in the following files:
+
+- `2_simulatedata.R`: this file contains the internal function `SimulateData()`.
+- `3_RunBumphunter.R`, `3_RunDMRcate.R`, and `3_RunProbeLasso.R`: these files contain the internal functions called at each design and parameter point---respectively, `RunBumphunter()`, `RunDMRcate()`, and `RunProbeLasso()`.
+- `4_simulate_and_save_Bumphunter_results.R`, `4_simulate_and_save_DMRcate_results.R`, and `4_simulate_and_save_ProbeLasso_results.R`: these files contain the wrapper functions to iterate over each design and parameter point---respectively, `WriteBumphunterResults()`, `WriteDMRcateResults()`, and `WriteProbeLassoResults()`. 
+
+
+
+# Read and Summarize Simulation Results
+Now that you've had a nice, long nap while these simulations were running, you can import and summarize your results. Once again, you'll need the initialization data that you used to start the simulation. This is how the summary functions know what the "true" DMRs are. This function takes in the name of the directory where you stored all your DMRcate results, and the "Gold Standard" information used to generate the original synthetic data.
+```{r ReadDMRcate, eval = FALSE}
+data("betaVals_mat")
+data("startEndCPG_df")
+
+dmrcateRes_df <- ProcessDMRcateResults(
+  resultsDir = "DMRcate_results/",
+  beta_mat = betaVals_mat,
+  AclustCPG_df = startEndCPG_df
+)
+```
+
+The arguments are much simpler than the last function, because this function can parse the file names of the raw results data to identify the correct parameter setting and design point. Also, this function should take only a moment to run. Save these summarized results for later.
+
+The necessary `.R` files to execute the code in this section (and similar code for the ProbeLasso or Bumphunter methods) are in the following files:
+
+- `5_clean_DMR_results.R`: this file contains the internal function `CleanResults()`.
+- `5_summarize_DMR_results.R`: this file contains the internal function `SummarizeResults()`.
+- `5_read_and_summarize_Bumphunter_results.R`, `5_read_and_summarize_DMRcate_results.R`, and `5_read_and_summarize_ProbeLasso_results.R`: these files contain the wrapper functions to read the raw data from each design and parameter point and summarize the overall performance for each method---respectively, `ProcessBumphunterResults()`, `ProcessDMRcateResults()`, and `ProcessProbeLassoResults()`.
+- `5_standardize_and_summarize_Comb-p_results.R`: for results from the Comb-p method, which is currently only implemented in `Python`, we use the function `ProcessCombpResults()` to import, standardize, and summarize the output of this method.
+
+
+
+# Conclusion
+The files and functions in the `DMRcompare` package are fully tested and documented. We invite users to explore our code and offer us feedback and suggestions.
+
+
