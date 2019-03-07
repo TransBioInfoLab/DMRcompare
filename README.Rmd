@@ -15,7 +15,7 @@ knitr::opts_chunk$set(
 ```
 
 # DMRcompare
-This project contains analysis scripts used in the manuscript "An Evaluation of Supervised Methods for Identifying Differentially Methylated Regions in Illumina Methylation Arrays" by Mallik et al.
+This project contains analysis scripts used in the manuscript "An Evaluation of Supervised Methods for Identifying Differentially Methylated Regions in Illumina Methylation Arrays" by [Mallik et al. (2018)](https://doi.org/10.1093/bib/bby085).
 
 ### I. Download Public Methylation Dataset GSE41169
 
